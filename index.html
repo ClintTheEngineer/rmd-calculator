@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RMD Payment Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+        input, select {
+            margin-top: 5px;
+            padding: 8px;
+            width: 100%;
+            max-width: 400px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border: 1px solid #ced4da;
+            width: 100%;
+            max-width: 600px;
+        }
+        .payment-details {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>RMD Payment Calculator</h1>
+
+    <form id="rmdForm">
+        <label for="rmdTotal">RMD Total Amount ($)</label>
+        <input type="number" id="rmdTotal" name="rmdTotal" required step="0.01" min="0">
+
+        <label for="rmdStartDate">RMD Start Date</label>
+        <input type="date" id="rmdStartDate" name="rmdStartDate" required>
+
+        <label for="rmdFrequency">RMD Frequency</label>
+        <select id="rmdFrequency" name="rmdFrequency" required>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="semi-annually">Semi-Annually</option>
+            <option value="annually">Annually</option>
+        </select>
+
+        <label for="withdrawalAmount">Withdrawal Amount ($)</label>
+        <input type="number" id="withdrawalAmount" name="withdrawalAmount" required step="0.01" min="0">
+
+        <label for="withdrawalFrequency">Withdrawal Frequency</label>
+        <select id="withdrawalFrequency" name="withdrawalFrequency" required>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="semi-annually">Semi-Annually</option>
+            <option value="annually">Annually</option>
+        </select>
+
+        <label for="withdrawalStartDate">Withdrawal Start Date</label>
+        <input type="date" id="withdrawalStartDate" name="withdrawalStartDate" required>
+
+        <button type="submit">Calculate RMD Payments</button>
+    </form>
+
+    <div class="output" id="output"></div>
+
+    <script>
+        document.getElementById('rmdForm').addEventListener('submit', function (e) {
+            e.preventDefault(); 
+
+            const rmdTotal = parseFloat(document.getElementById('rmdTotal').value);
+            const rmdStartDate = document.getElementById('rmdStartDate').value;
+            const rmdFrequency = document.getElementById('rmdFrequency').value;
+            const withdrawalAmount = parseFloat(document.getElementById('withdrawalAmount').value);
+            const withdrawalFrequency = document.getElementById('withdrawalFrequency').value;
+            const withdrawalStartDate = document.getElementById('withdrawalStartDate').value;
+
+            // Clear previous results
+            document.getElementById('output').innerHTML = '';
+
+            // Call the calculateFinalRmdPayment function
+            try {
+                const payments = calculateFinalRmdPayment(
+                    rmdTotal,
+                    rmdStartDate,
+                    rmdFrequency,
+                    withdrawalAmount,
+                    withdrawalFrequency,
+                    withdrawalStartDate
+                );
+
+                // Display the payments breakdown
+                const outputDiv = document.getElementById('output');
+                payments.forEach((payment, index) => {
+                    const paymentDetails = document.createElement('div');
+                    paymentDetails.className = 'payment-details';
+                    paymentDetails.innerHTML = `
+                        <strong>Payment ${index + 1}:</strong><br>
+                        <strong>Date:</strong> ${payment.date.toDateString()}<br>
+                        <strong>Amount:</strong> $${payment.amount.toFixed(2)}
+                    `;
+                    outputDiv.appendChild(paymentDetails);
+                });
+            } catch (error) {
+                document.getElementById('output').innerHTML = `<strong>Error:</strong> ${error.message}`;
+            }
+        });
+
+        function calculateFinalRmdPayment(rmdTotal, rmdStartDate, rmdFrequency, withdrawalAmount, withdrawalFrequency, withdrawalStartDate) {
+            const validFrequencies = ['monthly', 'quarterly', 'semi-annually', 'annually'];
+
+            if (!validFrequencies.includes(rmdFrequency) || !validFrequencies.includes(withdrawalFrequency)) {
+                throw new Error('Invalid frequency. Valid options are: "monthly", "quarterly", "semi-annually", "annually".');
+            }
+
+            let rmdTracker = rmdTotal;
+            const frequencyToMonths = {
+                'monthly': 1,
+                'quarterly': 3,
+                'semi-annually': 6,
+                'annually': 12
+            };
+
+            const rmdStart = new Date(rmdStartDate);
+            const withdrawalStart = new Date(withdrawalStartDate);
+            const monthsInYear = 12;
+            const remainingMonthsRmd = monthsInYear - rmdStart.getMonth() - 1;
+            const totalRmdPayments = Math.floor(remainingMonthsRmd / frequencyToMonths[rmdFrequency]) + 1;
+
+            let remainingRmdPayments = totalRmdPayments;
+            let paymentSchedule = [];
+
+            const remainingMonthsWithdrawal = monthsInYear - withdrawalStart.getMonth() - 1;
+            const totalWithdrawalPayments = Math.floor(remainingMonthsWithdrawal / frequencyToMonths[withdrawalFrequency]) + 1;
+
+            function populateSchedule(startDate, frequency, totalPayments) {
+                let schedule = [];
+                let date = new Date(startDate);
+                for (let i = 0; i < totalPayments; i++) {
+                    if (date.getFullYear() === new Date(startDate).getFullYear()) {
+                        schedule.push(new Date(date));
+                    }
+                    date.setMonth(date.getMonth() + frequencyToMonths[frequency]);
+                }
+                return schedule;
+            }
+
+            let rmdSchedule = populateSchedule(rmdStartDate, rmdFrequency, totalRmdPayments);
+            let withdrawalSchedule = populateSchedule(withdrawalStartDate, withdrawalFrequency, totalWithdrawalPayments);
+
+            let combinedSchedule = [...rmdSchedule, ...withdrawalSchedule].sort((a, b) => a - b);
+
+            for (let i = 0; i < combinedSchedule.length; i++) {
+                let currentDate = combinedSchedule[i];
+                let isWithdrawal = withdrawalSchedule.some(date => date.getTime() === currentDate.getTime());
+                let isRmdPayment = rmdSchedule.some(date => date.getTime() === currentDate.getTime());
+
+                // Handle withdrawal first
+                if (isWithdrawal) {
+                    if (rmdTracker > withdrawalAmount) {
+                        rmdTracker -= withdrawalAmount;
+                    } else {
+                        // Capture the final RMD payment before breaking
+                        if (rmdTracker > 0) {
+                            paymentSchedule.push({
+                                date: currentDate,
+                                amount: rmdTracker
+                            });
+                        }
+                        rmdTracker = 0; // No more RMD to process
+                        break;
+                    }
+                }
+
+                // Handle RMD payment
+                if (isRmdPayment && rmdTracker > 0) {
+                    let payment = remainingRmdPayments === 1 ? rmdTracker : rmdTracker / remainingRmdPayments;
+                    
+                    paymentSchedule.push({
+                        date: currentDate,
+                        amount: payment
+                    });
+
+                    // Update the tracker
+                    rmdTracker -= payment;
+
+                    // Check if this is the last RMD payment
+                    if (rmdTracker <= 0) {
+                        break;
+                    }
+                    
+                    remainingRmdPayments--;
+                }
+            }
+
+            // Add the final RMD payment if there's any remaining RMD left
+            if (rmdTracker > 0) {
+                paymentSchedule.push({
+                    date: combinedSchedule[combinedSchedule.length - 1], // Last date in the combined schedule
+                    amount: rmdTracker
+                });
+            }
+
+            return paymentSchedule;
+        }
+    </script>
+
+</body>
+</html>
